@@ -3,7 +3,7 @@ pipeline {
     
     environment {
         DOCKER_HUB_CREDENTIALS = credentials('docker-token')
-        DOCKER_IMAGE = 'itsanla/buku'
+        DOCKER_IMAGE = 'r4hid2307/buku'
         SERVICE_NAME = 'buku'
     }
     
