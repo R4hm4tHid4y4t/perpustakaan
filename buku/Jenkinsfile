@@ -3,9 +3,7 @@ pipeline {
     
     environment {
         DOCKER_HUB_CREDENTIALS = credentials('docker-token')
-        GHCR_CREDENTIALS = credentials('github-token')
         DOCKER_IMAGE = 'itsanla/buku'
-        GHCR_IMAGE = 'ghcr.io/itsanla/buku'
         SERVICE_NAME = 'buku'
     }
     
@@ -25,9 +23,9 @@ pipeline {
                     
                     // Fetch latest version from Docker Hub
                     def tags = sh(
-                        script: """curl -s 'https://registry.hub.docker.com/v2/repositories/${DOCKER_IMAGE}/tags?page_size=100' | \
-                                   grep -o '"name":"[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+"' | \
-                                   grep -o '[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+' | \
+                        script: """curl -s 'https://registry.hub.docker.com/v2/repositories/${DOCKER_IMAGE}/tags?page_size=100' | \\
+                                   grep -o '"name":"[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+"' | \\
+                                   grep -o '[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+' | \\
                                    sort -V | tail -1""",
                         returnStdout: true
                     ).trim()
@@ -66,7 +64,7 @@ pipeline {
         
         stage('Test') {
             steps {
-                dir('perpustakaan/buku') {
+                dir('buku') {
                     sh './mvnw clean test'
                 }
             }
@@ -74,7 +72,7 @@ pipeline {
         
         stage('Build') {
             steps {
-                dir('perpustakaan/buku') {
+                dir('buku') {
                     sh './mvnw clean package -DskipTests'
                 }
             }
@@ -82,11 +80,9 @@ pipeline {
         
         stage('Docker Build') {
             steps {
-                dir('perpustakaan/buku') {
+                dir('buku') {
                     sh "docker build --no-cache -t ${DOCKER_IMAGE}:${env.NEW_VERSION} ."
                     sh "docker tag ${DOCKER_IMAGE}:${env.NEW_VERSION} ${DOCKER_IMAGE}:latest"
-                    sh "docker tag ${DOCKER_IMAGE}:${env.NEW_VERSION} ${GHCR_IMAGE}:${env.NEW_VERSION}"
-                    sh "docker tag ${DOCKER_IMAGE}:${env.NEW_VERSION} ${GHCR_IMAGE}:latest"
                 }
             }
         }
@@ -99,29 +95,26 @@ pipeline {
             }
         }
         
-        stage('Push to GHCR') {
-            steps {
-                sh 'echo $GHCR_CREDENTIALS_PSW | docker login ghcr.io -u $GHCR_CREDENTIALS_USR --password-stdin'
-                sh "docker push ${GHCR_IMAGE}:${env.NEW_VERSION}"
-                sh "docker push ${GHCR_IMAGE}:latest"
-            }
-        }
-        
-        
         stage('Cleanup') {
             steps {
                 sh "docker rmi ${DOCKER_IMAGE}:${env.NEW_VERSION} ${DOCKER_IMAGE}:latest || true"
-                sh "docker rmi ${GHCR_IMAGE}:${env.NEW_VERSION} ${GHCR_IMAGE}:latest || true"
             }
         }
     }
     
     post {
         success {
-            echo "✅ ${SERVICE_NAME} service v${env.NEW_VERSION} built and pushed successfully!"
+            script {
+                echo "✅ ${env.SERVICE_NAME} service v${env.NEW_VERSION} built and pushed successfully!"
+            }
         }
         failure {
-            echo "❌ ${SERVICE_NAME} service build failed!"
+            script {
+                echo "❌ ${env.SERVICE_NAME} service build failed!"
+            }
+        }
+        always {
+            sh 'docker logout || true'
         }
     }
 }
