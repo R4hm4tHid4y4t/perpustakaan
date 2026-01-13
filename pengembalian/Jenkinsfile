@@ -65,7 +65,10 @@ pipeline {
         stage('Test') {
             steps {
                 dir('pengembalian') {
-                    sh './mvnw clean test'
+                    sh '''
+                        chmod +x mvnw
+                        ./mvnw clean test
+                    '''
                 }
             }
         }
@@ -73,7 +76,10 @@ pipeline {
         stage('Build') {
             steps {
                 dir('pengembalian') {
-                    sh './mvnw clean package -DskipTests'
+                    sh '''
+                        chmod +x mvnw
+                        ./mvnw clean package -DskipTests
+                    '''
                 }
             }
         }
