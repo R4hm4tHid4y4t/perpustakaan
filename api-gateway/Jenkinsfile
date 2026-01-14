@@ -3,9 +3,8 @@ pipeline {
     
     environment {
         DOCKER_HUB_CREDENTIALS = credentials('docker-token')
-        GHCR_CREDENTIALS = credentials('github-token')
-        DOCKER_IMAGE = 'itsanla/perpustakaan-gateway'
-        GHCR_IMAGE = 'ghcr.io/itsanla/perpustakaan-gateway'
+        DOCKER_IMAGE = 'rdhid2307/perpustakaan-gateway'
+        GHCR_IMAGE = 'ghcr.io/rdhid2307/perpustakaan-gateway'
         SERVICE_NAME = 'perpustakaan-gateway'
     }
     
@@ -66,23 +65,29 @@ pipeline {
         
         stage('Test') {
             steps {
-                dir('perpustakaan/api-gateway') {
-                    sh './mvnw clean test'
+                dir('api-gateway') {
+                    sh '''
+                        chmod +x mvnw
+                        ./mvnw clean test
+                    '''
                 }
             }
         }
         
         stage('Build') {
             steps {
-                dir('perpustakaan/api-gateway') {
-                    sh './mvnw clean package -DskipTests'
+                dir('api-gateway') {
+                    sh '''
+                        chmod +x mvnw
+                        ./mvnw clean package -DskipTests
+                    '''
                 }
             }
         }
         
         stage('Docker Build') {
             steps {
-                dir('perpustakaan/api-gateway') {
+                dir('api-gateway') {
                     sh "docker build --no-cache -t ${DOCKER_IMAGE}:${env.NEW_VERSION} ."
                     sh "docker tag ${DOCKER_IMAGE}:${env.NEW_VERSION} ${DOCKER_IMAGE}:latest"
                     sh "docker tag ${DOCKER_IMAGE}:${env.NEW_VERSION} ${GHCR_IMAGE}:${env.NEW_VERSION}"
@@ -93,20 +98,37 @@ pipeline {
         
         stage('Push to Docker Hub') {
             steps {
-                sh 'echo $DOCKER_HUB_CREDENTIALS_PSW | docker login -u $DOCKER_HUB_CREDENTIALS_USR --password-stdin'
-                sh "docker push ${DOCKER_IMAGE}:${env.NEW_VERSION}"
-                sh "docker push ${DOCKER_IMAGE}:latest"
+                retry(3) {
+                    sh 'echo $DOCKER_HUB_CREDENTIALS_PSW | docker login -u $DOCKER_HUB_CREDENTIALS_USR --password-stdin'
+                    sh "docker push ${DOCKER_IMAGE}:${env.NEW_VERSION}"
+                    sh "docker push ${DOCKER_IMAGE}:latest"
+                }
             }
         }
         
         stage('Push to GHCR') {
+            when {
+                expression {
+                    return fileExists('/var/jenkins_home/.jenkins-credentials/github-token')
+                }
+            }
             steps {
-                sh 'echo $GHCR_CREDENTIALS_PSW | docker login ghcr.io -u $GHCR_CREDENTIALS_USR --password-stdin'
-                sh "docker push ${GHCR_IMAGE}:${env.NEW_VERSION}"
-                sh "docker push ${GHCR_IMAGE}:latest"
+                script {
+                    try {
+                        withCredentials([usernamePassword(credentialsId: 'github-token', 
+                                                         usernameVariable: 'GHCR_USER', 
+                                                         passwordVariable: 'GHCR_TOKEN')]) {
+                            sh 'echo $GHCR_TOKEN | docker login ghcr.io -u $GHCR_USER --password-stdin'
+                            sh "docker push ${GHCR_IMAGE}:${env.NEW_VERSION}"
+                            sh "docker push ${GHCR_IMAGE}:latest"
+                        }
+                    } catch (Exception e) {
+                        echo "⚠️ Warning: Failed to push to GHCR. Error: ${e.message}"
+                        echo "Continuing without GHCR push..."
+                    }
+                }
             }
         }
-        
         
         stage('Cleanup') {
             steps {
@@ -118,10 +140,19 @@ pipeline {
     
     post {
         success {
-            echo "✅ ${SERVICE_NAME} service v${env.NEW_VERSION} built and pushed successfully!"
+            script {
+                def version = env.NEW_VERSION ?: 'unknown'
+                echo "✅ ${SERVICE_NAME} service v${version} built and pushed successfully!"
+            }
         }
         failure {
-            echo "❌ ${SERVICE_NAME} service build failed!"
+            script {
+                echo "❌ ${SERVICE_NAME} service build failed!"
+            }
+        }
+        always {
+            sh 'docker logout || true'
+            sh 'docker logout ghcr.io || true'
         }
     }
 }
