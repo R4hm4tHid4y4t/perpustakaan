@@ -3,8 +3,8 @@ pipeline {
     
     environment {
         DOCKER_HUB_CREDENTIALS = credentials('docker-token')
-        DOCKER_IMAGE = 'rdhid2307/perpustakaan-gateway'
-        GHCR_IMAGE = 'ghcr.io/rdhid2307/perpustakaan-gateway'
+        DOCKER_IMAGE = 'r4hid2307/perpustakaan-gateway'
+        GHCR_IMAGE = 'ghcr.io/r4hid2307/perpustakaan-gateway'
         SERVICE_NAME = 'perpustakaan-gateway'
     }
     
